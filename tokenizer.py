@@ -78,6 +78,25 @@ list_items_pattern = (
     f"{deep_nested_list_item})"
 )
 
+
+# 3. Block quotes (including nested quotes and citations, up to three levels, with length constraints)
+# 定义块引用行的基本模式
+blockquote_line_base = (
+    f"(?:(?:\\b[^\\r\\n]{{0,{MAX_BLOCKQUOTE_LINE_LENGTH}}}\\b"
+    f"(?:[.!?…]|\\.{3}|[\\u2026\\u2047-\\u2049]|[\\p{{Emoji_Presentation}}\\p{{Extended_Pictographic}}])(?=\\s|$))"
+    f"|(?:\\b[^\\r\\n]{{0,{MAX_BLOCKQUOTE_LINE_LENGTH}}}\\b(?=[\\r\\n]|$))"
+    f"|(?:\\b[^\\r\\n]{{0,{MAX_BLOCKQUOTE_LINE_LENGTH}}}\\b"
+    f"(?=[.!?…]|\\.{3}|[\\u2026\\u2047-\\u2049]|[\\p{{Emoji_Presentation}}\\p{{Extended_Pictographic}}])"
+    f"(?:.{{1,{LOOKAHEAD_RANGE}}}"
+    f"(?:[.!?…]|\\.{3}|[\\u2026\\u2047-\\u2049]|[\\p{{Emoji_Presentation}}\\p{{Extended_Pictographic}}])(?=\\s|$))?))"
+)
+
+# 定义块引用的模式
+block_quote = (
+    f"(?:(?:^>\\s?(?:>|\\s{{2,}}){{0,2}}{blockquote_line_base}\\r?\\n?)"
+    f"{{1,{MAX_BLOCKQUOTE_LINES}}})"
+)
+
 chunk_regex = re.compile(
     "("
     + headings_pattern
@@ -85,6 +104,9 @@ chunk_regex = re.compile(
     + citations_pattern
     + "|"
     + list_items_pattern
+    + "|"
+    + block_quote
+    + "|"
     + ")",
     re.MULTILINE | re.UNICODE
 )
