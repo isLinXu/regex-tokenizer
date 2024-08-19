@@ -3,7 +3,7 @@
 # Used in https://jina.ai/tokenizer
 
 import re
-# import regex as re
+import regex as re
 import sys
 import time
 import os
@@ -47,23 +47,44 @@ headings_pattern = (
 citations_pattern = f"(?:\\[[0-9]+\\][^\\r\\n]+)"
 
 # 2. List items (bulleted, numbered, lettered, or task lists, including nested, up to three levels, with length constraints)
-list_items_pattern = (r"(?:(?:^|\r?\n)[ \t]{0,3}(?:[-*+•]|\d{1,3}\.\w\.|\[[ xX]\])[ \t]+(?:(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?:[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?=\s|$))|(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?=[\r\n]|$))|(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?=[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?:.{1," + str(LOOKAHEAD_RANGE) + r"}(?:[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?=\s|$))?))"
-          r"(?:(?:\r?\n[ \t]{2,5}(?:[-*+•]|\d{1,3}\.\w\.|\[[ xX]\])[ \t]+(?:(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?:[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?=\s|$))|(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?=[\r\n]|$))|(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?=[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?:.{1," + str(LOOKAHEAD_RANGE) + r"}(?:[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?=\s|$))?)))"
-          r"{0," + str(MAX_NESTED_LIST_ITEMS) + r"}(?:\r?\n[ \t]{4," + str(MAX_LIST_INDENT_SPACES) + r"}(?:[-*+•]|\d{1,3}\.\w\.|\[[ xX]\])[ \t]+(?:(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?:[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?=\s|$))|(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?=[\r\n]|$))|(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?=[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?:.{1," + str(LOOKAHEAD_RANGE) + r"}(?:[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?=\s|$))?)))"
-          r"{0," + str(MAX_NESTED_LIST_ITEMS) + r"}?)")
+# 定义列表项的基本模式
+list_item_base = (
+    f"(?:[-*+•]|\\d{{1,3}}\\.\\w\\.|\\[[ xX]\\])[ \\t]+"
+    f"(?:(?:\\b[^\\r\\n]{{1,{MAX_LIST_ITEM_LENGTH}}}\\b"
+    f"(?:[.!?…]|\\.{3}|[\\u2026\\u2047-\\u2049]|[\\p{{Emoji_Presentation}}\\p{{Extended_Pictographic}}])(?=\\s|$))"
+    f"|(?:\\b[^\\r\\n]{{1,{MAX_LIST_ITEM_LENGTH}}}\\b(?=[\\r\\n]|$))"
+    f"|(?:\\b[^\\r\\n]{{1,{MAX_LIST_ITEM_LENGTH}}}\\b"
+    f"(?=[.!?…]|\\.{3}|[\\u2026\\u2047-\\u2049]|[\\p{{Emoji_Presentation}}\\p{{Extended_Pictographic}}])"
+    f"(?:.{{1,{LOOKAHEAD_RANGE}}}"
+    f"(?:[.!?…]|\\.{3}|[\\u2026\\u2047-\\u2049]|[\\p{{Emoji_Presentation}}\\p{{Extended_Pictographic}}])(?=\\s|$))?))"
+)
 
+# 定义嵌套列表项的模式
+nested_list_item = (
+    f"(?:\\r?\\n[ \\t]{{2,5}}{list_item_base})"
+    f"{{0,{MAX_NESTED_LIST_ITEMS}}}"
+)
 
-pattern = (r"(?:(?:^|\r?\n)[ \t]{0,3}(?:[-*+•]|\d{1,3}\.\w\.|\[[ xX]\])[ \t]+(?:(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?:[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?=\s|$))|(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?=[\r\n]|$))|(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?=[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?:.{1," + str(LOOKAHEAD_RANGE) + r"}(?:[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?=\s|$))?))"
-          r"(?:(?:\r?\n[ \t]{2,5}(?:[-*+•]|\d{1,3}\.\w\.|\[[ xX]\])[ \t]+(?:(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?:[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?=\s|$))|(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?=[\r\n]|$))|(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?=[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?:.{1," + str(LOOKAHEAD_RANGE) + r"}(?:[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?=\s|$))?)))"
-          r"{0," + str(MAX_NESTED_LIST_ITEMS) + r"}(?:\r?\n[ \t]{4," + str(MAX_LIST_INDENT_SPACES) + r"}(?:[-*+•]|\d{1,3}\.\w\.|\[[ xX]\])[ \t]+(?:(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?:[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?=\s|$))|(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?=[\r\n]|$))|(?:\b[^\r\n]{1," + str(MAX_LIST_ITEM_LENGTH) + r"}\b(?=[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?:.{1," + str(LOOKAHEAD_RANGE) + r"}(?:[.!?…]|\.{3}|[\u2026\u2047-\u2049]|[\p{Emoji_Presentation}\p{Extended_Pictographic}])(?=\s|$))?)))"
-          r"{0," + str(MAX_NESTED_LIST_ITEMS) + r"}?)")
+# 定义更深层嵌套列表项的模式
+deep_nested_list_item = (
+    f"(?:\\r?\\n[ \\t]{{4,{MAX_LIST_INDENT_SPACES}}}{list_item_base})"
+    f"{{0,{MAX_NESTED_LIST_ITEMS}}}"
+)
+
+# 组合所有部分
+list_items_pattern = (
+    f"(?:(?:^|\\r?\\n)[ \\t]{{0,3}}{list_item_base}"
+    f"{nested_list_item}"
+    f"{deep_nested_list_item})"
+)
+
 chunk_regex = re.compile(
     "("
     + headings_pattern
     + "|"
     + citations_pattern
     + "|"
-    # pattern
+    + list_items_pattern
     + ")",
     re.MULTILINE | re.UNICODE
 )
