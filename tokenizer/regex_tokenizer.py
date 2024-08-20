@@ -15,6 +15,7 @@ import sys
 import time
 import os
 import psutil
+import argparse
 
 class TextChunker:
     def __init__(self):
@@ -49,7 +50,7 @@ class TextChunker:
         self.MAX_STANDALONE_LINE_LENGTH = 800
         self.MAX_HTML_TAG_ATTRIBUTES_LENGTH = 100
         self.MAX_HTML_TAG_CONTENT_LENGTH = 1000
-        self.LOOKAHEAD_RANGE = 100  # Number of characters to look ahead for a sentence boundary
+        self.LOOKAHEAD_RANGE = 1000  # Number of characters to look ahead for a sentence boundary
 
     def compile_chunk_regex(self):
         # Define regex patterns
@@ -244,17 +245,14 @@ class TextChunker:
         matches, execution_time, memory_used = self.measure_performance(text)
         self.print_results(matches, execution_time, memory_used)
 
-
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python testRegex.py <text file>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description='Chunk text file.')
+    parser.add_argument('file_path', type=str, help='Path to the text file')
+    args = parser.parse_args()
 
-    file_path = sys.argv[1]
-
-    if not os.path.exists(file_path):
-        print(f"File not found: {file_path}")
+    if not os.path.exists(args.file_path):
+        print(f"File not found: {args.file_path}")
         sys.exit(1)
 
     chunker = TextChunker()
-    chunker.process_text(file_path)
+    chunker.process_text(args.file_path)
