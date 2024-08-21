@@ -9,7 +9,7 @@ It also prints the total number of characters, words, and sentences.
 @author: Hertz
 @time: 2024/8/20
 """
-
+import json
 import re
 import sys
 import time
@@ -18,7 +18,8 @@ import psutil
 import argparse
 
 class TextChunker:
-    def __init__(self):
+    def __init__(self, output_file='output.json'):
+        self.output_file = output_file
         self.define_patterns()
         self.compile_chunk_regex()
 
@@ -223,22 +224,52 @@ class TextChunker:
             print('\nWarning: Memory usage exceeded 100 MB. Consider processing the input in smaller chunks.')
 
 
+
+    def print_results(self, matches, execution_time, memory_used):
+        """Print the results of the regex chunking."""
+        print(f"Number of chunks: {len(matches) if matches else 0}")
+        print(f"Execution time: {execution_time:.3f} seconds")
+        print(f"Memory used: {self.format_bytes(memory_used)}")
+
+        print('\nFirst 10 chunks:')
+        if matches:
+            for match in matches[:10]:
+                print(repr(match)[:50])
+        else:
+            print('No chunks found.')
+
+        print(f"\nRegex flags: {self.chunk_regex.flags}")
+
+        if execution_time > 5:
+            print(
+                '\nWarning: Execution time exceeded 5 seconds. The regex might be too complex or the input too large.')
+        if memory_used > 100 * 1024 * 1024:
+            print('\nWarning: Memory usage exceeded 100 MB. Consider processing the input in smaller chunks.')
+
+    def save_results_to_json(self, matches):
+        """Save the results of the regex chunking to a JSON file."""
+        with open(self.output_file, 'w', encoding='utf-8') as f:
+            json.dump(matches, f, ensure_ascii=False, indent=4)
+        print(f"Results saved to {self.output_file}")
+
     def process_text(self, file_path):
         with open(file_path, 'r', encoding='utf-8') as file:
             text = file.read()
 
         matches, execution_time, memory_used = self.measure_performance(text)
         self.print_results(matches, execution_time, memory_used)
+        self.save_results_to_json(matches)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Chunk text file.')
     parser.add_argument('file_path', type=str, help='Path to the text file')
+    parser.add_argument('output_file', type=str, help='Path to the output JSON file', nargs='?', default='output.json')
     args = parser.parse_args()
 
     if not os.path.exists(args.file_path):
         print(f"File not found: {args.file_path}")
         sys.exit(1)
 
-    chunker = TextChunker()
+    chunker = TextChunker(args.output_file)
     chunker.process_text(args.file_path)
