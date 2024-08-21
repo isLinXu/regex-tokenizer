@@ -2,7 +2,7 @@ import os
 import sys
 import argparse
 
-from regex_tokenizer import TextChunker
+from tokenizer.regex_tokenizer import TextChunker
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Chunk text file.')

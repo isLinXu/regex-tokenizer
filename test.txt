@@ -1,0 +1,81 @@
+# Example Markdown Document
+## Headers
+Markdown supports different levels of headers:
+## Emphasis
+You can add emphasis using:
+- **Bold text**: `**Bold text**` or `__Bold text__`
+- *Italic text*: `*Italic text*` or `_Italic text_`
+- ***Bold and italic text***: `***Bold and italic text***`
+### Unordered List
+- Item 1
+- Item 2
+  - Subitem 2.1
+  - Subitem 2.2
+- Item 3
+### Ordered List
+1. First item
+2. Second item
+   1. Subitem 2.1
+   2. Subitem 2.2
+3. Third item
+## Links and Images
+You can add links and images:
+- [Link to Perplexity](https://www.perplexity.ai/)
+- Image of Markdown Logo
+## Blockquotes
+> This is a blockquote. Blockquotes are great for highlighting quotes or important information.
+## Code
+### Inline Code
+Use backticks for `inline code`.
+### Code Block
+```python
+def hello_world():
+    print("Hello, world!")
+hello_world()
+```
+## Tables
+You can create tables to display data:
+| Name     | Age | Occupation  |
+|----------|-----|-------------|
+| Alice    | 30  | Engineer    |
+| Charlie  | 35  | Teacher     |
+
+## Footnotes
+Here's a sentence with a footnote.[^1]
+[^1]: This is the footnote text.
+
+# Heading 1
+This is a paragraph with a citation [1] and some text.
+
+## Heading 2
+- Bullet list item 1
+- Bullet list item 2 with emoji 😊
+
+1. Numbered list item 1
+2. Numbered list item 2
+
+> Blockquote with some text.
+>> Nested blockquote.
+
+
+    Indented code block
+
+| Table Header 1 | Table Header 2 |
+| -------------- | -------------- |
+| Cell 1         | Cell 2         |
+| Cell 3         | Cell 4         |
+
+---
+
+Standalone line with punctuation!
+
+"This is a quoted text."
+
+<p>This is an HTML paragraph.</p>
+
+$$
+x = y + z
+$$
+
+
+Fallback content that doesn't fit other categories.
