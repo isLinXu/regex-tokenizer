@@ -8,6 +8,7 @@ It reads a text file and chunks it into sentences or phrases.
 It also prints the total number of characters, words, and sentences.
 @author: Hertz
 @time: 2024/8/20
+@version: 1.0
 """
 import json
 import re
