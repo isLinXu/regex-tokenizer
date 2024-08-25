@@ -11,6 +11,7 @@ It also prints the total number of characters, words, and sentences.
 @version: 1.0
 """
 import json
+import logging
 import re
 import sys
 import time
@@ -24,6 +25,10 @@ class TextChunker:
         self.output_file = output_file
         self.define_patterns()
         self.compile_chunk_regex()
+        self.setup_logging()
+
+    def setup_logging(self):
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
     def define_patterns(self):
         # Define variables for magic numbers
@@ -113,7 +118,7 @@ class TextChunker:
             )
 
             table_pattern = (
-                f"(?:(?:^|\r?\n)(?:\\|[^\\r\\n]{{0,{self.MAX_TABLE_CELL_LENGTH}}}\\|(?:\\r?\\n\\|[-:]{{1,{self.MAX_TABLE_CELL_LENGTH}}}\\|){{0,1}}(?:\\r?\\n\\|[^\\r\\n]{{0,{self.MAX_TABLE_CELL_LENGTH}}}\\|){{0,{self.MAX_TABLE_ROWS}}})"
+                f"(?:(?:^|\r?\n)(?:\\|[^\\r\\n]{{0,1000}}\\|(?:\\r?\\n\\|[-:]{{1,1000}}\\|){{0,1}}(?:\\r?\\n\\|[^\\r\\n]{{0,1000}}\\|){{0,50}})"
                 f"|<table>[\s\S]{{0,{self.MAX_HTML_TABLE_LENGTH}}}?</table>)"
             )
 
@@ -198,10 +203,12 @@ class TextChunker:
         matches = self.chunk_regex.finditer(text)
         chunks = []
         for match in matches:
-            for name, pattern in self.patterns_dict.items():
-                if re.fullmatch(pattern, match.group()):
-                    chunks.append({'text': match.group(), 'type': name})
-                    break
+            chunk_text = match.group().strip()
+            if chunk_text:  # Check if the chunk is not empty
+                for name, pattern in self.patterns_dict.items():
+                    if re.fullmatch(pattern, chunk_text):
+                        chunks.append({'text': chunk_text, 'type': name})
+                        break
         return chunks
 
 
@@ -230,24 +237,24 @@ class TextChunker:
 
     def print_results(self, matches, execution_time, memory_used):
         """Print the results of the regex chunking."""
-        print(f"Number of chunks: {len(matches) if matches else 0}")
-        print(f"Execution time: {execution_time:.3f} seconds")
-        print(f"Memory used: {self.format_bytes(memory_used)}")
+        logging.info(f"Number of chunks: {len(matches) if matches else 0}")
+        logging.info(f"Execution time: {execution_time:.3f} seconds")
+        logging.info(f"Memory used: {self.format_bytes(memory_used)}")
 
-        print('\nFirst 10 chunks:')
+        logging.info('\nFirst 10 chunks:')
         if matches:
             for match in matches[:10]:
-                print(repr(match)[:50])
+                logging.info(repr(match)[:50])
         else:
-            print('No chunks found.')
+            logging.info('No chunks found.')
 
-        print(f"\nRegex flags: {self.chunk_regex.flags}")
+        logging.info(f"\nRegex flags: {self.chunk_regex.flags}")
 
         if execution_time > 5:
-            print(
-                '\nWarning: Execution time exceeded 5 seconds. The regex might be too complex or the input too large.')
+            logging.warning('Execution time exceeded 5 seconds. The regex might be too complex or the input too large.')
         if memory_used > 100 * 1024 * 1024:
-            print('\nWarning: Memory usage exceeded 100 MB. Consider processing the input in smaller chunks.')
+            logging.warning('Memory usage exceeded 100 MB. Consider processing the input in smaller chunks.')
+
 
     def save_results_to_jsonl(self, matches):
         """Save the results of the regex chunking to a JSONL file."""
@@ -260,7 +267,6 @@ class TextChunker:
     def process_text(self, file_path):
         with open(file_path, 'r', encoding='utf-8') as file:
             text = file.read()
-
         matches, execution_time, memory_used = self.measure_performance(text)
         self.print_results(matches, execution_time, memory_used)
         self.save_results_to_jsonl(matches)
