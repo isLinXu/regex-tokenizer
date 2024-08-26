@@ -1,6 +1,5 @@
-
-
 import yaml
+import json
 import logging
 import sys
 
@@ -15,9 +14,7 @@ def load_config(config_file):
         logging.error(f"Error parsing YAML config file: {e}")
         sys.exit(1)
 
-import json
-import logging
-import sys
+
 
 def load_and_substitute_regex_patterns(regex_file, config):
     try:
