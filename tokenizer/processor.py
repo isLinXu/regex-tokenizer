@@ -1,78 +1,68 @@
 import logging
-import os
-import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
-import psutil
-
-from tokenizer.utils import measure_performance, print_results, save_results, save_stats
+from .result_saver import save_results, save_stats
+from .performance_measurer import measure_performance, format_bytes
 
 
-def process_text(chunk_text, chunk_regex, text, output_file, stats_file, stats):
-    try:
-        matches, execution_time, memory_used = measure_performance(chunk_text, text)
-        print_results(matches, execution_time, chunk_regex, memory_used)
-        save_results(matches, output_file)
-        save_stats(stats_file, stats)
-    except Exception as e:
-        logging.error(f"Error processing text: {e}")
+class TextProcessor:
+    def __init__(self, chunker, output_file='output.jsonl', stats_file='stats.json'):
+        self.chunker = chunker
+        self.output_file = output_file
+        self.stats_file = stats_file
 
-
-def process_file(file_path, chunk_text, chunk_regex, output_file, stats_file, stats):
-    try:
+    def process_file(self, file_path):
         with open(file_path, 'r', encoding='utf-8') as file:
             text = file.read()
-        process_text(chunk_text, chunk_regex, text, output_file, stats_file, stats)
-    except IOError as e:
-        logging.error(f"Error reading file {file_path}: {e}")
+        chunks = self.chunker.chunk_text(text)
+        self.save_results(chunks)
+        self.save_stats()
 
-
-def process_large_file(file_path, chunk_size=1024 * 1024):
-    try:
+    def process_large_file(self, file_path, chunk_size=1024 * 1024):
         with open(file_path, 'r', encoding='utf-8') as file:
-            text = []
             while True:
-                chunk = file.read(chunk_size)
-                if not chunk:
+                text_chunk = file.read(chunk_size)
+                if not text_chunk:
                     break
-                text.append(chunk)
-                if len(text) > 0:
-                    process_text(''.join(text))
-                    text = []
-    except IOError as e:
-        logging.error(f"Error reading file {file_path}: {e}")
+                chunks = self.chunker.chunk_text(text_chunk)
+                self.save_results(chunks)
+        self.save_stats()
 
+    def process_text_in_parallel_with_performance(self, text, num_threads=4):
+        from concurrent.futures import ThreadPoolExecutor
 
-def process_text_in_parallel(text, chunk_text, num_threads=4):
-    chunk_size = len(text) // num_threads
-    futures = []
-    with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        for i in range(num_threads):
-            start = i * chunk_size
-            end = None if i == num_threads - 1 else (i + 1) * chunk_size
-            futures.append(executor.submit(chunk_text, text[start:end]))
+        def chunk_and_process(sub_text):
+            return self.chunker.chunk_text(sub_text)
 
-        all_matches = []
-        for future in as_completed(futures):
-            try:
-                all_matches.extend(future.result())
-            except Exception as e:
-                logging.error(f"Error in thread execution: {e}")
+        text_chunks = [text[i:i + len(text) // num_threads] for i in range(0, len(text), len(text) // num_threads)]
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            results, execution_time, memory_used = measure_performance(executor.map, chunk_and_process, text_chunks)
 
-    return all_matches
+        matches = [item for sublist in results for item in sublist]
+        return matches, execution_time, memory_used
 
+    def save_results(self, matches, output_format='jsonl'):
+        save_results(matches, self.output_file, output_format)
 
-def process_text_in_parallel_with_performance(text, num_threads=4):
-    start_time = time.time()
-    process = psutil.Process(os.getpid())
-    start_memory = process.memory_info().rss
+    def save_stats(self):
+        save_stats(self.chunker.stats, self.stats_file)
 
-    matches = process_text_in_parallel(text, num_threads)
+    def print_results(self, matches, execution_time, memory_used):
+        logging.info(f"Total chunks: {self.chunker.stats['total_chunks']}")
+        logging.info(f"Total tokens: {self.chunker.stats['total_tokens']}")
+        logging.info(f"Total characters: {self.chunker.stats['total_characters']}")
+        logging.info(f"Total lines: {self.chunker.stats['total_lines']}")
+        logging.info(f"Execution time: {execution_time:.2f} seconds")
+        logging.info(f"Memory used: {format_bytes(memory_used)}")
 
-    end_time = time.time()
-    end_memory = process.memory_info().rss
+        logging.info('\nFirst 10 chunks:')
+        if matches:
+            for match in matches[:10]:
+                logging.info(repr(match)[:50])
+        else:
+            logging.info('No chunks found.')
 
-    execution_time = end_time - start_time
-    memory_used = end_memory - start_memory
+        logging.info(f"\nRegex flags: {self.chunker.chunk_regex.flags}")
 
-    return matches, execution_time, memory_used
+        if execution_time > 5:
+            logging.warning('Execution time exceeded 5 seconds. The regex might be too complex or the input too large.')
+        if memory_used > 100 * 1024 * 1024:
+            logging.warning('Memory usage exceeded 100 MB. Consider processing the input in smaller chunks.')
