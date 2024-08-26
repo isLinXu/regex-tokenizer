@@ -40,7 +40,7 @@ regex-tokenizer是一个用于将文本文件分块的工具。
 ## 安装
 
 ```
-git clone https://github.com/yourusername/text-chunker.git
+git clone https://github.com/isLinXu/regex-tokenizer
 cd  regex-tokenizer
 ```
 
@@ -54,7 +54,6 @@ pip install -r requirements.txt
 MAX_HEADING_LENGTH: 7
 MAX_HEADING_CONTENT_LENGTH: 200
 MAX_HEADING_UNDERLINE_LENGTH: 200
-... ...
 ```
 
 ## patterns
@@ -71,11 +70,11 @@ MAX_HEADING_UNDERLINE_LENGTH: 200
 
 ```shell
 python3 run.py sample.txt --config config.yaml \ 
-													--regex patterns.json \
-													--output_file output.jsonl 
-													--output_format jsonl \
-													--num_threads 4 \
-													--stats_file stats.json
+--regex patterns.json \
+--output_file output.jsonl \
+--output_format jsonl \
+--num_threads 4 \
+--stats_file stats.json
 ```
 
 ```shell
