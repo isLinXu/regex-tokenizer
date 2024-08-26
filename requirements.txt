@@ -1,0 +1,5 @@
+psutil~=5.9.8
+pyyaml~=6.0
+regex~=2023.12.25
+setuptools~=69.5.1
+pandas~=2.1.4

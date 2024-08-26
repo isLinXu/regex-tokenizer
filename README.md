@@ -11,8 +11,13 @@
 
 # regex-tokenizer
 
-# Demo
+Converted the [Jina Tokenizer regex pattern](https://gist.github.com/hanxiao/3f60354cf6dc5ac698bc9154163b4e6a) to python.
 
+regex-tokenizer是一个用于将文本文件分块的工具。
+它可以根据配置文件中的正则表达式模式将文本分割成不同的块，并生成统计信息。
+该工具支持大文件处理、并行处理和多种输出格式。
+
+# 效果展示
 
 |                             Text                             |                           Chunker                            |                            Jsonl                             |
 | :----------------------------------------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------: |
@@ -21,10 +26,57 @@
 | <img width="746" alt="src3" src="https://github.com/user-attachments/assets/f5e8630f-68d1-4da3-9de3-fda69b76b061">                                                             | <img width="746" alt="demo3@2x" src="https://github.com/user-attachments/assets/b11ff8e4-e94c-40f2-9c11-8032be306ee6"> | <img width="746" alt="result3@2x" src="https://github.com/user-attachments/assets/d587f55b-66cf-406f-acea-4b7f62049704"> |
 |  |                                                              |                                                              |
 
-# features
+# 特性
+- 配置驱动：通过 YAML 配置文件和 JSON 正则表达式文件进行配置。
+- 多种输出格式：支持 JSONL、CSV、XML 和 Excel 格式的输出。
+- 大文件处理：支持按块读取大文件，避免内存溢出。
+- 并行处理：支持多线程并行处理，提高处理速度。
+- 性能测量：提供执行时间和内存使用情况的测量。
+- 日志记录：记录详细的日志信息，包括错误和处理信息。
+- 统计信息：生成详细的统计信息，包括总块数、总字符数、总行数等。
 
+# 用法
 
-# usages
+## 安装
+
+```
+git clone https://github.com/yourusername/text-chunker.git
+cd  regex-tokenizer
+```
+
+```
+pip install -r requirements.txt
+```
+
+## config
+配置文件 `config.yaml` 包含了一些配置参数，如最大标题长度、最大标题内容长度等。
+```yaml
+MAX_HEADING_LENGTH: 7
+MAX_HEADING_CONTENT_LENGTH: 200
+MAX_HEADING_UNDERLINE_LENGTH: 200
+... ...
+```
+
+## patterns
+正则表达式文件 `patterns.json` 包含了各种正则表达式，如标题、引文、表格等。例如：
+```json
+{
+  "headings": "(?:^(?:[#*=-]{1,7}|\\w[^\\r\\n]{0,200}\\r?\\n[-=]{2,200}|<h[1-6][^>]{0,100}>)[^\\r\\n]{1,200}(?:</h[1-6]>)?(?:\\r?\\n|$))",
+  "citations": "(?:\\$[0-9]+\\$[^\\r\\n]{1,800})",
+  ... ...
+}
+```
+
+## 运行
+
+```shell
+python3 run.py sample.txt --config config.yaml \ 
+													--regex patterns.json \
+													--output_file output.jsonl 
+													--output_format jsonl \
+													--num_threads 4 \
+													--stats_file stats.json
+```
 
 ```shell
 python3 run.py data/demo/alice_in_wonderland.txt alice_in_wonderland.jsonl
@@ -37,4 +89,14 @@ python3 run.py data/demo/test.md test.jsonl
 ```
 python3 run.py data/demo/红楼梦.txt 红楼梦.jsonl
 ```
+
+日志文件 `text_chunker.log` 将记录所有的日志信息，包括错误和处理信息。
+
+# 贡献
+
+欢迎贡献代码！请 fork 本项目并提交 pull request。
+
+# 致谢
+本项目使用了 [Jina](https://github.com/jina-ai/jina) 的 Tokenizer 模块，
+感谢 [hanxiao](https://github.com/hanxiao) 的贡献。
 
