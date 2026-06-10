@@ -17,6 +17,23 @@ regex-tokenizer是一个用于将文本文件分块的工具。
 它可以根据配置文件中的正则表达式模式将文本分割成不同的块，并生成统计信息。
 该工具支持大文件处理、并行处理和多种输出格式。
 
+## v3.0 更新
+
+| 类别 | 改动 |
+|------|------|
+| **Bug 修复** | 双重处理导致统计翻倍 → 合并为单次处理路径 |
+| **Bug 修复** | 大文件 `'w'` 模式覆盖数据 → 改为 `'a'` 追加模式 |
+| **Bug 修复** | 边界截断硬切 → 语义边界感知分割（段落 > 换行 > 空格 > 硬切） |
+| **Bug 修复** | CJK token 计数不准确 → 自动检测 CJK 比例，按字符计数 |
+| **Bug 修复** | 超时保护无效 → 实现 SIGALRM (Unix) + 线程超时双策略 |
+| **性能** | fullmatch 循环逐一匹配 → 命名捕获组单次 finditer（减少 ~95% 匹配次数） |
+| **性能** | `re` 模块 → `regex` 模块（更好的 Unicode 支持） |
+| **性能** | `num_threads` 参数已声明但未实现 → ThreadPoolExecutor 并行处理 |
+| **架构** | `sys.exit(1)` 错误处理 → 自定义异常层级（ConfigError/PatternError/ExportError/TimeoutError） |
+| **架构** | `patterns.json` 硬编码数字 → `patterns_new.json` 引用 config.yaml 占位符 + 命名捕获组 |
+| **架构** | logger 重复添加 handler → 幂等 setup_logging + reset_logging |
+| **质量** | 无测试 → 23 个单元测试覆盖核心模块 |
+
 # 效果展示
 
 |                             Text                             |                           Chunker                            |                            Jsonl                             |
@@ -29,11 +46,14 @@ regex-tokenizer是一个用于将文本文件分块的工具。
 # 特性
 - 配置驱动：通过 YAML 配置文件和 JSON 正则表达式文件进行配置。
 - 多种输出格式：支持 JSONL、CSV、XML 和 Excel 格式的输出。
-- 大文件处理：支持按块读取大文件，避免内存溢出。
-- 并行处理：支持多线程并行处理，提高处理速度。
+- 大文件处理：语义边界感知分割，避免截断破坏语义完整性。
+- 并行处理：支持多线程并行处理（`--num_threads`），提高处理速度。
+- CJK 友好：自动检测中日韩文本比例，切换字符级/词级 token 计数。
+- 超时保护：SIGALRM (Unix) + 线程超时双策略，防止灾难性回溯。
 - 性能测量：提供执行时间和内存使用情况的测量。
-- 日志记录：记录详细的日志信息，包括错误和处理信息。
-- 统计信息：生成详细的统计信息，包括总块数、总字符数、总行数等。
+- 日志记录：幂等日志配置，同时输出到控制台和文件。
+- 统计信息：生成详细统计，包括类型分布（type_distribution）。
+- 异常体系：自定义异常层级替代 sys.exit，便于上层捕获和处理。
 
 # 用法
 
@@ -57,24 +77,32 @@ MAX_HEADING_UNDERLINE_LENGTH: 200
 ```
 
 ## patterns
-正则表达式文件 `patterns.json` 包含了各种正则表达式，如标题、引文、表格等。例如：
+正则表达式文件 `patterns.json` 包含了各种正则表达式，如标题、引文、表格等。  
+v3.0 推荐 `patterns_new.json`，支持 config.yaml 占位符引用和命名捕获组：
 ```json
 {
-  "headings": "(?:^(?:[#*=-]{1,7}|\\w[^\\r\\n]{0,200}\\r?\\n[-=]{2,200}|<h[1-6][^>]{0,100}>)[^\\r\\n]{1,200}(?:</h[1-6]>)?(?:\\r?\\n|$))",
-  "citations": "(?:\\$[0-9]+\\$[^\\r\\n]{1,800})",
-  ... ...
+  "headings": "(?:^(?:[#*=-]{1,{MAX_HEADING_LENGTH}}|...",
+  "code_block": "(?:(?:^|\\r?\\n)(?:```|~~~)...",
+  ...
 }
 ```
+占位符 `{MAX_HEADING_LENGTH}` 在加载时自动替换为 config.yaml 中的值。
 
 ## 运行
 
 ```shell
-python3 run.py sample.txt --config config.yaml \ 
---regex patterns.json \
+python3 run.py sample.txt --config config.yaml \
+--regex patterns_new.json \
 --output_file output.jsonl \
 --output_format jsonl \
 --num_threads 4 \
 --stats_file stats.json
+```
+
+## 测试
+
+```shell
+python -m pytest tests/ -v
 ```
 
 ```shell

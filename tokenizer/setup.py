@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='regex-tokenizer',
-    version='v1.0.0',
+    version='3.0.0',
     packages=['tokenizer'],
     url='',
     license='',
