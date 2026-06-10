@@ -72,6 +72,7 @@ class TextChunker:
     def __init__(self, config_file='config.yaml', regex_file='patterns.json',
                  token_method='auto', regex_timeout=5.0):
         self.config = load_config(config_file)
+        self._regex_file = regex_file
         self.regex_patterns = load_and_substitute_regex_patterns(regex_file, self.config)
         self.token_method = token_method
         self.regex_timeout = regex_timeout
@@ -202,5 +203,31 @@ class TextChunker:
         return result
 
     def update_regex_patterns(self, new_patterns):
+        """热更新：合并新模式并重新编译"""
         self.regex_patterns.update(new_patterns)
         self.compile_chunk_regex()
+
+    def reload_patterns(self, regex_file=None):
+        """热更新：从文件重新加载 patterns 并重新编译。
+
+        Args:
+            regex_file: 新的 patterns 文件路径（默认使用原路径）
+        """
+        if regex_file is not None:
+            self._regex_file = regex_file
+        self.regex_patterns = load_and_substitute_regex_patterns(
+            self._regex_file, self.config
+        )
+        self.compile_chunk_regex()
+        logging.info(f"Patterns reloaded from {self._regex_file}")
+
+    def reset_stats(self):
+        """重置统计信息（处理新文件前调用）"""
+        self.stats = {
+            'total_tokens': 0,
+            'total_chunks': 0,
+            'total_characters': 0,
+            'total_lines': 0,
+            'type_distribution': {},
+            'chunk_details': []
+        }
