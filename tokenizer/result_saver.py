@@ -17,8 +17,9 @@ def save_results(matches, output_file, output_format='jsonl'):
         raise ValueError(f"Unsupported output format: {output_format}")
 
 def save_results_to_jsonl(matches, output_file):
+    """将匹配结果保存为JSONL格式，逐行追加写入"""
     try:
-        with open(output_file, 'w', encoding='utf-8') as f:
+        with open(output_file, 'a', encoding='utf-8') as f:  # ← 改用追加模式
             for match in matches:
                 json.dump(match, f, ensure_ascii=False)
                 f.write('\n')
