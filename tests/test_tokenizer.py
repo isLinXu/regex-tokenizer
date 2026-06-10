@@ -1,6 +1,7 @@
-"""Regex Tokenizer v3.0 单元测试
+"""Regex Tokenizer v3.1 单元测试
 
-覆盖：token 计数、分块逻辑、异常处理、配置加载、语义分割。
+覆盖：token 计数、分块逻辑、异常处理、配置加载、语义分割、
+API 接口、embedding 输出、热更新。
 """
 
 import os
@@ -15,6 +16,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tokenizer.regex_tokenizer import TextChunker, count_tokens
 from tokenizer.processor import TextProcessor, _safe_split_text
 from tokenizer.loader import load_config, load_and_substitute_regex_patterns
+from tokenizer.result_saver import save_results, _chunk_id
+from tokenizer.api import chunk_text, chunk_file, quick_stats
 from tokenizer.exceptions import (
     TokenizerError, ConfigError, PatternError, ExportError, TimeoutError,
 )
@@ -277,3 +280,111 @@ class TestIntegration:
         with open(stats_file) as f:
             stats = json.load(f)
             assert stats['total_chunks'] >= 1
+
+
+# ── Embedding Output ─────────────────────────────────────────────────
+
+class TestEmbeddingOutput:
+    def test_embedding_format(self, chunker, tmp_dir):
+        output_file = os.path.join(tmp_dir, 'output.jsonl')
+        matches = [
+            {'text': 'Hello world.', 'type': 'sentence', 'token_count': 2,
+             'character_count': 12, 'line_count': 1},
+        ]
+        save_results(matches, output_file, output_format='embedding',
+                     source_file='test.md')
+
+        embed_file = output_file.replace('.jsonl', '.embedding.jsonl')
+        assert os.path.exists(embed_file)
+        with open(embed_file) as f:
+            for line in f:
+                record = json.loads(line)
+                assert 'id' in record
+                assert 'text' in record
+                assert 'metadata' in record
+                assert record['metadata']['source'] == 'test.md'
+                assert record['metadata']['type'] == 'sentence'
+
+    def test_chunk_id_deterministic(self):
+        id1 = _chunk_id("hello", 0, "test.txt")
+        id2 = _chunk_id("hello", 0, "test.txt")
+        assert id1 == id2
+
+    def test_chunk_id_different_content(self):
+        id1 = _chunk_id("hello", 0, "test.txt")
+        id2 = _chunk_id("world", 0, "test.txt")
+        assert id1 != id2
+
+    def test_unsupported_format(self, tmp_dir):
+        output_file = os.path.join(tmp_dir, 'output.jsonl')
+        with pytest.raises(ExportError, match="Unsupported output format"):
+            save_results([], output_file, output_format='parquet')
+
+
+# ── Python API ────────────────────────────────────────────────────────
+
+class TestPythonAPI:
+    def test_chunk_text(self, sample_config, sample_patterns):
+        results = chunk_text(
+            "# Hello\nThis is a test.",
+            config=sample_config,
+            patterns=sample_patterns
+        )
+        assert isinstance(results, list)
+        assert len(results) >= 1
+        assert all('text' in r and 'type' in r for r in results)
+
+    def test_chunk_file(self, sample_config, sample_patterns, tmp_dir):
+        input_file = os.path.join(tmp_dir, 'api_test.txt')
+        with open(input_file, 'w') as f:
+            f.write("# API Test\nHello world. Goodbye.")
+
+        stats = chunk_file(
+            input_file, config=sample_config, patterns=sample_patterns,
+            output=os.path.join(tmp_dir, 'api_out.jsonl')
+        )
+        assert stats['total_chunks'] >= 1
+        assert 'type_distribution' in stats
+
+    def test_chunk_file_not_found(self):
+        with pytest.raises(FileNotFoundError):
+            chunk_file("/nonexistent/file.txt")
+
+    def test_quick_stats(self, sample_config, sample_patterns):
+        result = quick_stats(
+            "# Hello\nThis is a test sentence.",
+            config=sample_config, patterns=sample_patterns
+        )
+        assert 'total_chunks' in result
+        assert 'type_distribution' in result
+
+
+# ── Hot Reload ────────────────────────────────────────────────────────
+
+class TestHotReload:
+    def test_reload_patterns(self, chunker, sample_config, tmp_dir):
+        # 创建新的 patterns 文件
+        new_patterns_path = os.path.join(tmp_dir, 'patterns_v2.json')
+        new_patterns = {
+            "headings": r"^#{1,7}\s+\S.+",
+            "sentence": r"[^\r\n]{1,400}[.!?](?=\s|$)",
+            "fallback": r"[^\r\n]{1,800}",
+            "custom_type": r"TODO:.*",
+        }
+        with open(new_patterns_path, 'w') as f:
+            json.dump(new_patterns, f)
+
+        chunker.reload_patterns(new_patterns_path)
+        assert 'custom_type' in chunker.regex_patterns
+
+    def test_reset_stats(self, chunker):
+        chunker.chunk_text("# Hello world.")
+        assert chunker.stats['total_chunks'] > 0
+
+        chunker.reset_stats()
+        assert chunker.stats['total_chunks'] == 0
+        assert chunker.stats['type_distribution'] == {}
+
+    def test_update_regex_patterns(self, chunker):
+        chunker.update_regex_patterns({"custom": r"TODO:.*"})
+        assert 'custom' in chunker.regex_patterns
