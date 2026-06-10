@@ -1,10 +1,20 @@
 import json
 import csv
+import hashlib
 import logging
 import pandas as pd
 from xml.etree.ElementTree import Element, SubElement, ElementTree
 
-def save_results(matches, output_file, output_format='jsonl'):
+from .exceptions import ExportError
+
+
+def _chunk_id(text, index, source_file=""):
+    """生成确定性 chunk ID（基于内容哈希 + 序号）"""
+    content = f"{source_file}:{index}:{text[:200]}"
+    return hashlib.sha256(content.encode('utf-8')).hexdigest()[:16]
+
+
+def save_results(matches, output_file, output_format='jsonl', source_file=""):
     if output_format == 'jsonl':
         save_results_to_jsonl(matches, output_file)
     elif output_format == 'csv':
@@ -13,19 +23,21 @@ def save_results(matches, output_file, output_format='jsonl'):
         save_results_to_xml(matches, output_file)
     elif output_format == 'excel':
         save_results_to_excel(matches, output_file)
+    elif output_format == 'embedding':
+        save_results_to_embedding(matches, output_file, source_file=source_file)
     else:
-        raise ValueError(f"Unsupported output format: {output_format}")
+        raise ExportError(f"Unsupported output format: {output_format}")
 
 def save_results_to_jsonl(matches, output_file):
     """将匹配结果保存为JSONL格式，逐行追加写入"""
     try:
-        with open(output_file, 'a', encoding='utf-8') as f:  # ← 改用追加模式
+        with open(output_file, 'a', encoding='utf-8') as f:
             for match in matches:
                 json.dump(match, f, ensure_ascii=False)
                 f.write('\n')
         logging.info(f"Results saved to {output_file}")
     except IOError as e:
-        logging.error(f"Error writing to file {output_file}: {e}")
+        raise ExportError(f"Error writing to file {output_file}: {e}")
 
 def save_results_to_csv(matches, output_file):
     csv_file = output_file.replace('.jsonl', '.csv')
@@ -37,7 +49,7 @@ def save_results_to_csv(matches, output_file):
                 writer.writerow(match)
         logging.info(f"Results saved to {csv_file}")
     except IOError as e:
-        logging.error(f"Error writing to file {csv_file}: {e}")
+        raise ExportError(f"Error writing to file {csv_file}: {e}")
 
 def save_results_to_xml(matches, output_file):
     root = Element('chunks')
@@ -55,7 +67,7 @@ def save_results_to_xml(matches, output_file):
         tree.write(xml_file, encoding='utf-8')
         logging.info(f"Results saved to {xml_file}")
     except IOError as e:
-        logging.error(f"Error writing to file {xml_file}: {e}")
+        raise ExportError(f"Error writing to file {xml_file}: {e}")
 
 def save_results_to_excel(matches, output_file):
     excel_file = output_file.replace('.jsonl', '.xlsx')
@@ -64,7 +76,7 @@ def save_results_to_excel(matches, output_file):
         df.to_excel(excel_file, index=False)
         logging.info(f"Results saved to {excel_file}")
     except IOError as e:
-        logging.error(f"Error writing to file {excel_file}: {e}")
+        raise ExportError(f"Error writing to file {excel_file}: {e}")
 
 def save_stats(stats, stats_file):
     try:
@@ -72,4 +84,42 @@ def save_stats(stats, stats_file):
             json.dump(stats, f, ensure_ascii=False, indent=2)
         logging.info(f"Statistics saved to {stats_file}")
     except IOError as e:
-        logging.error(f"Error writing to file {stats_file}: {e}")
+        raise ExportError(f"Error writing stats to {stats_file}: {e}")
+
+
+def save_results_to_embedding(matches, output_file, source_file=""):
+    """导出为 embedding-ready 格式，兼容 Chroma / FAISS / Milvus。
+
+    每行一个 JSON 对象：
+    {
+      "id": "a1b2c3d4e5f6g7h8",
+      "text": "chunk content...",
+      "metadata": {
+        "type": "headings",
+        "token_count": 12,
+        "character_count": 45,
+        "line_count": 1,
+        "source": "doc.md"
+      }
+    }
+    """
+    embed_file = output_file.replace('.jsonl', '.embedding.jsonl')
+    try:
+        with open(embed_file, 'w', encoding='utf-8') as f:
+            for idx, match in enumerate(matches):
+                record = {
+                    'id': _chunk_id(match.get('text', ''), idx, source_file),
+                    'text': match.get('text', ''),
+                    'metadata': {
+                        'type': match.get('type', 'unknown'),
+                        'token_count': match.get('token_count', 0),
+                        'character_count': match.get('character_count', len(match.get('text', ''))),
+                        'line_count': match.get('line_count', 1),
+                        'source': source_file,
+                    }
+                }
+                json.dump(record, f, ensure_ascii=False)
+                f.write('\n')
+        logging.info(f"Embedding-ready results saved to {embed_file}")
+    except IOError as e:
+        raise ExportError(f"Error writing embedding file {embed_file}: {e}")

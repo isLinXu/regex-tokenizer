@@ -28,7 +28,7 @@ class TextProcessor:
         with open(file_path, 'r', encoding='utf-8') as file:
             text = file.read()
         chunks = self.chunker.chunk_text(text)
-        self.save_results(chunks)
+        self.save_results(chunks, source_file=os.path.basename(file_path))
         self.save_stats()
 
     def process_large_file(self, file_path, chunk_size=1024 * 1024):
@@ -47,7 +47,7 @@ class TextProcessor:
                 all_chunks.extend(chunks)
 
         # 一次性写入所有结果
-        save_results(all_chunks, self.output_file)
+        save_results(all_chunks, self.output_file, source_file=os.path.basename(file_path))
         save_stats(self.chunker.stats, self.stats_file)
 
     def _parallel_chunk(self, text_chunks):
@@ -102,8 +102,8 @@ class TextProcessor:
 
         return all_chunks
 
-    def save_results(self, matches, output_format='jsonl'):
-        save_results(matches, self.output_file, output_format)
+    def save_results(self, matches, output_format='jsonl', source_file=""):
+        save_results(matches, self.output_file, output_format, source_file=source_file)
 
     def save_stats(self):
         save_stats(self.chunker.stats, self.stats_file)
