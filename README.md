@@ -34,6 +34,30 @@ regex-tokenizer是一个用于将文本文件分块的工具。
 | **架构** | logger 重复添加 handler → 幂等 setup_logging + reset_logging |
 | **质量** | 无测试 → 23 个单元测试覆盖核心模块 |
 
+## v3.1 更新
+
+| 类别 | 改动 |
+|------|------|
+| **功能** | 性能测量集成（执行时间 + 内存峰值） |
+| **功能** | 输出摘要（Processing Summary） |
+| **功能** | embedding-ready 输出格式（兼容 Chroma/FAISS/Milvus） |
+| **功能** | Python API 编程接口（`chunk_text`/`chunk_file`/`quick_stats`） |
+| **功能** | 模式热更新（`update_regex_patterns`/`reload_patterns`） |
+| **质量** | 单元测试扩展至 34 个 |
+
+## v3.2 更新
+
+| 类别 | 改动 |
+|------|------|
+| **功能** | **Coverage 分析 & Gap 检测** — 对比原文与 chunk 拼接文本，找出未被匹配的"间隙" |
+| **功能** | **Overlap 滑动窗口** — 相邻 chunk 添加重叠上下文，解决跨块语义断裂 |
+| **功能** | **Streaming Iterator API** — 生成器接口逐块返回，避免大文件全量驻留内存 |
+| **功能** | **Smart Chunk Merge** — 合并相邻同类型碎片块（如 hashtag/mention），拆分超大块 |
+| **功能** | **Stdout NDJSON 流式输出** — 每行一个 JSON 对象，兼容 jq/yq，支持管道串联 |
+| **功能** | **Benchmark 套件** — 标准语料量化测试（吞吐量/延迟/内存/覆盖率） |
+| **配置** | 新增 `OVERLAP_CHARS`、`MIN_TOKEN_THRESHOLD` 参数 |
+| **质量** | 单元测试扩展至 62 个（28 个 v3.2 新增） |
+
 # 效果展示
 
 |                             Text                             |                           Chunker                            |                            Jsonl                             |
@@ -45,7 +69,7 @@ regex-tokenizer是一个用于将文本文件分块的工具。
 
 # 特性
 - 配置驱动：通过 YAML 配置文件和 JSON 正则表达式文件进行配置。
-- 多种输出格式：支持 JSONL、CSV、XML 和 Excel 格式的输出。
+- 多种输出格式：支持 JSONL、CSV、XML、Excel 和 embedding 格式的输出。
 - 大文件处理：语义边界感知分割，避免截断破坏语义完整性。
 - 并行处理：支持多线程并行处理（`--num_threads`），提高处理速度。
 - CJK 友好：自动检测中日韩文本比例，切换字符级/词级 token 计数。
@@ -54,6 +78,12 @@ regex-tokenizer是一个用于将文本文件分块的工具。
 - 日志记录：幂等日志配置，同时输出到控制台和文件。
 - 统计信息：生成详细统计，包括类型分布（type_distribution）。
 - 异常体系：自定义异常层级替代 sys.exit，便于上层捕获和处理。
+- **v3.2** Coverage 分析：检测正则匹配遗漏的文本区域（gap）。
+- **v3.2** Overlap 窗口：相邻 chunk 添加重叠上下文，解决跨块语义断裂。
+- **v3.2** 流式迭代器：生成器接口逐块返回，内存友好。
+- **v3.2** 智能合并：合并相邻同类型碎片块，拆分超大块。
+- **v3.2** NDJSON 流式输出：每行一个 JSON 对象，兼容 jq/yq。
+- **v3.2** Benchmark 套件：标准语料量化测试。
 
 # 用法
 
@@ -97,6 +127,51 @@ python3 run.py sample.txt --config config.yaml \
 --output_format jsonl \
 --num_threads 4 \
 --stats_file stats.json
+```
+
+### v3.2 新增参数
+
+```shell
+# 智能合并碎片块
+python3 run.py input.md out.jsonl --smart_merge
+
+# 添加重叠上下文（50字符）
+python3 run.py input.md out.jsonl --overlap_chars 50
+
+# 覆盖率分析
+python3 run.py input.md out.jsonl --coverage
+
+# NDJSON 流式输出
+python3 run.py input.md out.jsonl --ndjson_stream
+```
+
+### Python API (v3.2)
+
+```python
+from tokenizer.api import chunk_text, chunk_file
+
+# 带智能合并
+results = chunk_text("# Hello\nWorld.", smart_merge=True)
+
+# 带重叠窗口
+results = chunk_text("# Hello\nWorld.", overlap_chars=50)
+
+# 带覆盖率分析
+result = chunk_text("# Hello\nWorld.", coverage=True)
+print(result['coverage']['coverage_ratio'])  # 0.95
+
+# 流式迭代器
+from tokenizer.streaming import StreamingChunker
+streamer = StreamingChunker()
+for chunk in streamer.chunk_text_iter(long_text):
+    process(chunk)  # 逐块处理，内存友好
+
+# NDJSON 流式输出
+from tokenizer.ndjson_stream import NDJSONWriter
+writer = NDJSONWriter(output_file='result.ndjson')
+for chunk in chunks:
+    writer.write(chunk)
+writer.close()
 ```
 
 ## 测试

@@ -1,7 +1,8 @@
-"""Regex Tokenizer 入口脚本
+"""Regex Tokenizer 入口脚本 - v3.2
 
 修复：合并双路径为单次处理路径，避免统计翻倍
 v3.1: 集成性能测量、输出摘要、embedding 格式
+v3.2: Coverage 分析、Overlap 窗口、Smart Merge、NDJSON 流式输出
 """
 
 import argparse
@@ -12,6 +13,10 @@ import logging
 from tokenizer.processor import TextProcessor
 from tokenizer.regex_tokenizer import TextChunker
 from tokenizer.performance_measurer import measure_performance, format_bytes
+from tokenizer.coverage import CoverageAnalyzer
+from tokenizer.overlap import OverlapSlidingWindow
+from tokenizer.smart_merge import SmartChunkMerger
+from tokenizer.ndjson_stream import NDJSONWriter
 from tokenizer.exceptions import TokenizerError, ExportError
 
 
@@ -25,6 +30,10 @@ def main():
   python run.py input.md out.jsonl --regex patterns_new.json --num_threads 4
   python run.py input.md out.jsonl --output_format embedding
   python run.py input.md out.jsonl --token_method character
+  python run.py input.md out.jsonl --smart_merge
+  python run.py input.md out.jsonl --overlap_chars 50
+  python run.py input.md out.jsonl --coverage
+  python run.py input.md out.jsonl --ndjson_stream
         """
     )
     parser.add_argument('file_path', type=str, help='Path to the text file')
@@ -49,6 +58,15 @@ def main():
                         default='auto')
     parser.add_argument('--timeout', type=float,
                         help='Regex matching timeout in seconds', default=5.0)
+    # v3.2 新增参数
+    parser.add_argument('--smart_merge', action='store_true',
+                        help='Enable smart chunk merge (v3.2)')
+    parser.add_argument('--overlap_chars', type=int, default=0,
+                        help='Overlap characters between adjacent chunks (v3.2)')
+    parser.add_argument('--coverage', action='store_true',
+                        help='Enable coverage analysis & gap detection (v3.2)')
+    parser.add_argument('--ndjson_stream', action='store_true',
+                        help='Enable NDJSON streaming output (v3.2)')
     args = parser.parse_args()
 
     if not os.path.exists(args.file_path):
@@ -76,6 +94,28 @@ def main():
                 processor.process_file, args.file_path
             )
 
+        # 获取 chunks
+        chunks = chunker.stats.get('chunk_details', [])
+
+        # v3.2: 智能合并
+        if args.smart_merge:
+            merger = SmartChunkMerger()
+            chunks = merger.merge(chunks)
+
+        # v3.2: 重叠窗口
+        if args.overlap_chars > 0:
+            window = OverlapSlidingWindow(overlap_chars=args.overlap_chars)
+            chunks = window.apply(chunks)
+
+        # v3.2: NDJSON 流式输出
+        if args.ndjson_stream:
+            writer = NDJSONWriter(
+                output_file=args.output_file.replace('.jsonl', '.ndjson')
+            )
+            for chunk in chunks:
+                writer.write(chunk)
+            writer.close()
+
         # 输出摘要
         stats = chunker.stats
         print(f"\n{'='*50}")
@@ -92,6 +132,21 @@ def main():
             for t, c in sorted(stats['type_distribution'].items(),
                                key=lambda x: -x[1]):
                 print(f"    {t:20s} {c:>6d}")
+
+        # v3.2: 覆盖率分析
+        if args.coverage:
+            with open(args.file_path, 'r', encoding='utf-8') as f:
+                text = f.read()
+            analyzer = CoverageAnalyzer(chunker)
+            coverage_report = analyzer.analyze(text, chunks)
+            print(f"\n  Coverage Analysis:")
+            print(f"    Coverage:  {coverage_report['coverage_ratio']*100:.1f}%")
+            print(f"    Gaps:     {coverage_report['gap_count']}")
+            if coverage_report['gaps']:
+                for gap in coverage_report['gaps'][:5]:
+                    preview = gap['text'][:50].replace('\n', '\\n')
+                    print(f"      [{gap['start']}:{gap['end']}] len={gap['length']} \"{preview}...\"")
+
         print(f"\n  Time:     {exec_time:.3f}s")
         print(f"  Memory:   {format_bytes(mem_used)}")
         print(f"{'='*50}\n")
